@@ -1,0 +1,220 @@
+---
+title: "2. Plotting fits"
+author: "Giulio Caravagna"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+institute: "Institute for Cancer Research"
+email: "giulio.caravagna@icr.ac.uk"
+output: rmarkdown::github_document
+always_allow_html: true
+vignette: >
+  %\VignetteIndexEntry{2}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+
+```{r, message=FALSE, warning=F}
+library(mobster)
+library(tidyr)
+library(dplyr)
+```
+
+This vignette describes the plotting functions available in `mobster`. As an example, we use
+one of the available datasets where we annotate some random mutations as drivers.
+
+```{r, fig.width=5, fig.height=4}
+# Example data where we have 3 events as drivers
+example_data = Clusters(mobster::fit_example$best) %>% dplyr::select(VAF)
+
+# Drivers annotation (we selected this entries to have nice plots)
+drivers_rows = c(2239, 3246, 3800)
+
+example_data$is_driver = FALSE
+example_data$driver_label = NA
+
+example_data$is_driver[drivers_rows] = TRUE
+example_data$driver_label[drivers_rows] = c("DR1", "DR2", "DR3")
+
+# Fit and print the data
+fit = mobster_fit(example_data, auto_setup = 'FAST')
+
+best_fit = fit$best
+print(best_fit)
+```
+
+# Model plots
+
+The plot reports some fit statistics, and shows the annotated drivers if any.
+
+```{r, fig.width=5, fig.height=4}
+plot(best_fit)
+```
+
+One can hide the drivers setting `is_driver` to `FALSE`. 
+
+```{r, fig.width=5, fig.height=4}
+copy_best_fit = best_fit 
+copy_best_fit$data$is_driver = FALSE 
+
+plot(copy_best_fit)
+```
+
+It is possible to annotate further labels to this plot, providing just a VAF value and a `driver_label` value. Each annotation points to the VAF value on the x-axis, and on the corresponding mixture density value for the y-axis.
+
+```{r, fig.width=5, fig.height=4, warning = FALSE}
+plot(best_fit,
+     annotation_extras = 
+       data.frame(
+         VAF = .35, 
+         driver_label = "Something",
+         stringsAsFactors = FALSE)
+     )
+```
+
+Other visualisations can be obtained as follows
+```{r, fig.width=10, fig.height=8, warning = FALSE}
+ggpubr::ggarrange(
+  plot(best_fit, tail_color = "darkorange"),                  # Tail color
+  plot(best_fit, beta_colors = c("steelblue", "darkorange")), # Beta colors
+  plot(best_fit, cutoff_assignment = .50),                    # Hide mutations based on latent variables 
+  plot(best_fit, secondary_axis = "SSE"),               # Add a mirrored y-axis with the % of SSE
+  ncol = 2,
+  nrow = 2
+)
+```
+
+# Fit statistics
+
+You can plot the latent variables, which are used to determine *hard clustering* assignments of the input mutations. A `cutoff_assignment` determines a cut to prioritize assignments above the hard clustering assignments probability. Non-assignable mutations (`NA` values) are on top of the heatmap.
+
+```{r, fig.width=10, fig.height=5}
+ggpubr::ggarrange(
+  mobster::plot_latent_variables(best_fit, cutoff_assignment = 0),
+  mobster::plot_latent_variables(best_fit, cutoff_assignment = 0.4),
+  mobster::plot_latent_variables(best_fit, cutoff_assignment = 0.8),
+  mobster::plot_latent_variables(best_fit, cutoff_assignment = 0.97),
+  ncol = 4,
+  nrow = 1
+)
+```
+
+You can plot a barplot of the mixing proportions, using the same colour scheme for the fit (here, default). The barplot annotates a dashed line by default at 2%.
+
+```{r, fig.width=3, fig.height=3}
+plot_mixing_proportions(best_fit)
+```
+
+The negative log-likelihood `NLL` of the fit can be plot against the iteration steps, so to check that the trend is decreasing over time.
+```{r, fig.width=3, fig.height=3}
+plot_NLL(best_fit)
+```
+
+A contributor to the `NLL` is the entropy of the mixture, which can be visualized along with the reduced entropy, which is used by `reICL`.
+```{r, fig.width=3, fig.height=3}
+plot_entropy(best_fit)
+```
+
+# Inspecting alternative fits
+
+Alternative models are returned by function `mobster_fit`, and can be easly visualized; the table reporting the scores is a good place to start investigating alternative fits to the data.
+
+```{r, fig.width=15, fig.height=4, message=FALSE, warning=FALSE}
+print(fit$fits.table)
+```
+
+Top three fits, plot in-line.
+```{r, fig.width=15, fig.height=4, message=FALSE, warning=FALSE}
+ggpubr::ggarrange(
+  plot(fit$runs[[1]]),
+  plot(fit$runs[[2]]),
+  plot(fit$runs[[3]]),
+  ncol = 3, 
+  nrow = 1
+)
+```
+
+The sum of squared error (SSE) between the fit density and the data (binned with bins of size `0.01`), can be plot to compare multiple fits. This measure is a sort of "goodness of fit" statistics.
+
+```{r, fig.width=6, fig.height=3}
+# Goodness of fit (SSE), for the top 3 fits.
+plot_gofit(fit, TOP = 3)
+```
+
+The scores for model selection can also be compared graphically. 
+
+```{r, fig.width=4, fig.height=4}
+plot_fit_scores(fit)
+```
+
+In the above plot, all the computed scoring functions (`BIC`, `AIC`, `ICL` and `reICL`) are shown. This plot can be used to quickly grasp the best model with, for instance, the default score (`reICL`) is also the best for other scores. In this graphics the red dot represents the best model according to each possible score.
+
+# Model-selection report
+
+A general model-selection report assembles most of the above graphics.
+
+```{r, fig.width=9, fig.height=9, message=FALSE, warning=FALSE}
+plot_model_selection(fit, TOP = 5)
+```
+
+# Fit animation
+
+It seems useless, but if you want you can animate `mobster` fits using [plotly](https://plotly.com/r/).
+
+```{r, message=F, warning=F, eval=TRUE}
+example_data$is_driver = FALSE
+
+# Get a custom model using trace = TRUE
+animation_model = mobster_fit(
+  example_data, 
+  parallel =  FALSE, 
+  samples = 3,
+  init = 'random',
+  trace = TRUE,
+  K = 2,
+  tail = TRUE)$best
+
+# Prepare trace, and retain every 5% of the fitting steps
+trace = split(animation_model$trace, f = animation_model$trace$step)
+steps = seq(1, length(trace), round(0.05 * length(trace)))
+  
+# Compute a density per step, using the template_density internal function
+trace_points = lapply(steps, function(w, x) {
+  new.x = x
+  new.x$Clusters = trace[[w]]
+  
+  # Hidden function (:::)
+  points = mobster:::template_density(
+    new.x,
+    x.axis = seq(0, 1, 0.01),
+    binwidth = 0.01,
+    reduce = TRUE
+  )
+  points$step = w
+  
+  points
+},
+x = animation_model)
+  
+trace_points = Reduce(rbind, trace_points)
+  
+# Use plotly to create a ShinyApp
+require(plotly)
+    
+trace_points %>%
+  plot_ly(
+    x = ~ x,
+    y = ~ y,
+    frame = ~ step,
+    color = ~ cluster,
+    type = 'scatter',
+    mode = 'markers',
+    showlegend = TRUE
+  )
+```
