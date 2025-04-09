@@ -1,15 +1,3 @@
----
-output: github_document
----
-
-```{r, include = FALSE}
-knitr::opts_chunk$set(
-  collapse = TRUE,
-  comment = "#>",
-  fig.path = "man/figures/README-",
-  out.width = "100%"
-)
-```
 
 # mobster <a href='https://caravagnalab.github.io/mobster'><img src='man/figures/logo.png' align="right" height="139" /></a>
 
